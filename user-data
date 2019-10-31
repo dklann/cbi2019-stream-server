@@ -1,0 +1,58 @@
+#cloud-config
+
+package_upgrade: true
+packages:
+  - icecast2
+  - libpam-ssh-agent-auth
+  - libterm-readline-perl-perl
+  - libwww-perl
+  - perl-doc
+  - zsh
+  - zsh-common
+
+users:
+  - name: dklann
+    gecos: David Klann
+    password: 1q2w
+    groups: sudo
+    shell: /bin/zsh
+    ssh-authorized-keys: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDMV1VeInASOo96+LlQW6a7spoxDsKbSa5GNwK9yjcX8OT4hmpWmhx8zTvFmFdBI0srTVoPsfYl5UXMHbw1Tk6fhq2fc8zyagS6NDbRt7t0WF4Xl7/bwG87vVJRyxi8bar5/V8oupJBn0V5XzcWDPxTaRHCTZ3sdymhQhfEJpVTUsmq7YTZDMCfMCE/IdAoPvyqikMRvVaJJQTpftqIoMZGveGml43Li+g9VtNEYT1Dzx+ZW4PO/t2kxMRfwDJ4O89a2yEqeNiJfou6JAku6tAz90ZSOzAeukrrTsjI0rai/FWeKNSM+3l0NyEI+QFkr1apXufv3GAkHZAZmRBGvgLRuyxKTTJ0R874T8SocnpIsoZZPf16sD4w2XmJqUlA095rYWN2RF5EC9n3Bo/GzUBZjFmP4YnMsI7AXSYTSyjnM9+3K+CvbbKYSnWg4y8m3YLcjpj59s/2wLQCmLuW2QatZ+al3hABj/iHbNWOLKs2iMXy5Km75f/ZWMUQBK4Z2jLSKQXzeUwbruSaqfNNSQC8DSJn9lDnl7oSv9Ju2pErtOh/KkMNm5Nu0dw62nsPCwbvIc1ZJyZeFotAEgCqpmF7ki/ROuZikuKYrNsq2RWdJU8kw41PYrsXLxSOcgFEqjuXLlweR9m+TLnyy00mxcNxKW8022ipWVw83akU/8cJEw== /home/dklann/.ssh/id_rsa
+    ssh-authorized-keys: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIQjop+2QC6mbYjWqFrHevHR4UfYDnERpokcb0sO1tY4 dklann@fritz
+
+runcmd:
+
+# Configure sudo to support SSH agent authorization:
+#     Part 1 update /etc/pam.d/sudo
+  - sed -i -e '1aauth sufficient pam_ssh_agent_auth.so file=~/.ssh/authorized_keys' /etc/pam.d/sudo
+#     Part 2: update /etc/sudoers
+  - sed -i -e '/^# Host alias specification/iDefaults  env_keep += "SSH_AUTH_SOCK"' /etc/sudoers
+
+# Secure root SSH access and enable the service
+  - sed -i -e '/Port /s/^.*$/Port 32808/' -e '/^PermitRootLogin/s/^.*$/PermitRootLogin without-password/' -e '/PasswordAuthentication yes/s/yes/no/' /etc/ssh/sshd_config
+# Permit SSH connections on TCP port 32808
+  - sed -i -e '/^ports=/s,^.*$,ports=32808/tcp,' /etc/ufw/applications.d/openssh-server
+  - ufw app update OpenSSH
+  - ufw allow OpenSSH
+# Permit Icecast connections on TCP port 8282
+  - echo '[Icecast]\ntitle=Icecast Streaming Server\ndescription=Icecast Streaming Server\nports=8282/tcp' > /etc/ufw/applications.d/icecast
+  - ufw app update Icecast
+  - ufw allow Icecast
+  - systemctl enable ssh.service
+  - systemctl enable ufw.service
+  - echo 'y' | ufw enable
+
+# Configure the icecast server
+  - sed -i -e 's,\(<source-password>\).*\(</source-password>\),\1sooper-sekrit-password\2,' /etc/icecast2/icecast.xml
+  - sed -i -e 's,\(<port>\).*\(</port>\),\18282\2,' /etc/icecast2/icecast.xml
+  - systemctl enable icecast2.service
+
+# Set the timezone appropriately
+  - rm -f /etc/localtime
+  - ln -s /usr/share/zoneinfo/US/Central /etc/localtime
+  - timedatectl set-timezone US/Central
+
+# Reboot after doing everything above
+power_state:
+  timeout: 90
+  message: Rebooting...
+  mode: reboot
