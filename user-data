@@ -44,6 +44,7 @@ runcmd:
 # Configure the icecast server
   - sed -i -e 's,\(<source-password>\).*\(</source-password>\),\1sooper-sekrit-password\2,' /etc/icecast2/icecast.xml
   - sed -i -e 's,\(<port>\).*\(</port>\),\18282\2,' /etc/icecast2/icecast.xml
+  - sed -i -e 's,ENABLE=false,ENABLE=true,' /etc/default/icecast2
   - systemctl enable icecast2.service
 
 # Set the timezone appropriately
